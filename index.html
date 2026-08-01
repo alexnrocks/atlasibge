@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas HD em Alta Resolução</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { width: 100%; height: 100%; overflow: hidden; font-family: system-ui, sans-serif; }
+        #map { width: 100vw; height: 100vh; background: #181818; }
+        #selector-box {
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            z-index: 1000; background: rgba(255, 255, 255, 0.95); padding: 10px 18px;
+            border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex;
+            align-items: center; gap: 12px; backdrop-filter: blur(5px);
+        }
+        #selector-box select { padding: 6px 12px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; cursor: pointer; min-width: 250px; }
+        .leaflet-bottom.leaflet-left { bottom: 20px; left: 15px; }
+        
+        #rotate-box {
+            position: absolute;
+            bottom: 20px;
+            right: 15px;
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 6px 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            backdrop-filter: blur(5px);
+        }
+
+        .rotate-btn {
+            background: #fff;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #333;
+            transition: background 0.2s;
+        }
+
+        .rotate-btn:hover {
+            background: #e6e6e6;
+        }
+    </style>
+</head>
+<body>
+    <div id="selector-box">
+        <label for="mapSelect">📖 <b>Selecione a Página / Mapa:</b></label>
+        <select id="mapSelect" onchange="carregarPrancha(this.value)"></select>
+    </div>
+    <div id="map"></div>
+    <div id="rotate-box">
+        <button class="rotate-btn" onclick="girarMapa(-90)" title="Girar 90° para a esquerda">↩️ -90°</button>
+        <button class="rotate-btn" onclick="girarMapa(90)" title="Girar 90° para a direita">↪️ +90°</button>
+        <button class="rotate-btn" onclick="resetarRotacao()" title="Resetar rotação">↺ Reset</button>
+    </div>
+
+   <script>
+    const paginasAtlas = {
+        "pag_13": { "titulo": "Nosso Lugar no Universo - O Universo (Pág. 10)", "mapaUrl": "mapas_webp/pagina_13.webp" },
+        "pag_14": { "titulo": "Nosso Lugar no Universo - A Terra (Pág. 11)", "mapaUrl": "mapas_webp/pagina_14.webp" },
+        "pag_15": { "titulo": "Nosso Lugar no Universo - A Terra (Detalhes)", "mapaUrl": "mapas_webp/pagina_15.webp" },
+        "pag_16": { "titulo": "Nosso Lugar no Universo - A Terra e a Lua", "mapaUrl": "mapas_webp/pagina_16.webp" },
+        "pag_17": { "titulo": "Nosso Lugar no Universo - O Homem no Espaço (Pág. 14)", "mapaUrl": "mapas_webp/pagina_17.webp" },
+        "pag_18": { "titulo": "Nosso Lugar no Universo - Exploração Espacial", "mapaUrl": "mapas_webp/pagina_18.webp" },
+        "pag_19": { "titulo": "A Formação dos Continentes (Pág. 16)", "mapaUrl": "mapas_webp/pagina_19.webp" },
+        "pag_20": { "titulo": "A Formação dos Continentes - Evolução", "mapaUrl": "mapas_webp/pagina_20.webp" },
+        "pag_23": { "titulo": "Cartografia - Conceitos Básicos (Pág. 20)", "mapaUrl": "mapas_webp/pagina_23.webp" },
+        "pag_24": { "titulo": "Cartografia - Formas da Terra (Pág. 21)", "mapaUrl": "mapas_webp/pagina_24.webp" },
+        "pag_25": { "titulo": "Cartografia - Coordenadas Geográficas (Pág. 22)", "mapaUrl": "mapas_webp/pagina_25.webp" },
+        "pag_26": { "titulo": "Cartografia - Altitude (Pág. 23)", "mapaUrl": "mapas_webp/pagina_26.webp" },
+        "pag_27": { "titulo": "Cartografia - Satélites (Pág. 24)", "mapaUrl": "mapas_webp/pagina_27.webp" },
+        "pag_28": { "titulo": "Cartografia - Sistema GNSS (Pág. 25)", "mapaUrl": "mapas_webp/pagina_28.webp" },
+        "pag_29": { "titulo": "Cartografia - As Projeções Cartográficas (Pág. 26)", "mapaUrl": "mapas_webp/pagina_29.webp" },
+        "pag_30": { "titulo": "Cartografia - Projeções (continuação)", "mapaUrl": "mapas_webp/pagina_30.webp" },
+        "pag_31": { "titulo": "Cartografia - Tipos de Projeções", "mapaUrl": "mapas_webp/pagina_31.webp" },
+        "pag_32": { "titulo": "Cartografia - Escala Cartográfica (Pág. 30)", "mapaUrl": "mapas_webp/pagina_32.webp" },
+        "pag_33": { "titulo": "Cartografia - Escala e Medidas", "mapaUrl": "mapas_webp/pagina_33.webp" },
+        "pag_34": { "titulo": "Cartografia - Sensoriamento Remoto (Pág. 31)", "mapaUrl": "mapas_webp/pagina_34.webp" },
+        "pag_35": { "titulo": "Cartografia - Aplicações do Sensoriamento", "mapaUrl": "mapas_webp/pagina_35.webp" },
+        "pag_36": { "titulo": "Cartografia - Aerofotogrametria (Pág. 33)", "mapaUrl": "mapas_webp/pagina_36.webp" },
+        "pag_37": { "titulo": "Cartografia - Convenções Cartográficas (Pág. 34)", "mapaUrl": "mapas_webp/pagina_37.webp" },
+        "pag_38": { "titulo": "Cartografia - Mapeamento Temático (Pág. 35)", "mapaUrl": "mapas_webp/pagina_38.webp" },
+        "pag_41": { "titulo": "Mundo - Continentes e Hemisférios (Pág. 38)", "mapaUrl": "mapas_webp/pagina_41.webp" },
+        "pag_42": { "titulo": "Mundo - Fuso Horário e Passagens Marítimas (Pág. 39)", "mapaUrl": "mapas_webp/pagina_42.webp" },
+        "pag_44": { "titulo": "Mundo - Planisfério Político (Pág. 41a)", "mapaUrl": "mapas_webp/pagina_44.webp" },
+        "pag_45": { "titulo": "Mundo - Planisfério Físico (Pág. 41b)", "mapaUrl": "mapas_webp/pagina_45.webp" },
+        "pag_46": { "titulo": "Continentes e Regiões do Mundo - Abertura", "mapaUrl": "mapas_webp/pagina_46.webp" },
+        "pag_47": { "titulo": "Continentes - América do Norte (Pág. 42)", "mapaUrl": "mapas_webp/pagina_47.webp" },
+        "pag_48": { "titulo": "Continentes - América do Norte - Uso da Terra", "mapaUrl": "mapas_webp/pagina_48.webp" },
+        "pag_49": { "titulo": "Continentes - América Central e Caribe (Pág. 44)", "mapaUrl": "mapas_webp/pagina_49.webp" },
+        "pag_50": { "titulo": "Continentes - América Central - Uso da Terra", "mapaUrl": "mapas_webp/pagina_50.webp" },
+        "pag_51": { "titulo": "Continentes - América do Sul (Pág. 46)", "mapaUrl": "mapas_webp/pagina_51.webp" },
+        "pag_52": { "titulo": "Continentes - América do Sul - Uso da Terra", "mapaUrl": "mapas_webp/pagina_52.webp" },
+        "pag_53": { "titulo": "Continentes - Europa (Pág. 48)", "mapaUrl": "mapas_webp/pagina_53.webp" },
+        "pag_54": { "titulo": "Continentes - Europa - Uso da Terra", "mapaUrl": "mapas_webp/pagina_54.webp" },
+        "pag_55": { "titulo": "Continentes - África (Pág. 50)", "mapaUrl": "mapas_webp/pagina_55.webp" },
+        "pag_56": { "titulo": "Continentes - África - Uso da Terra", "mapaUrl": "mapas_webp/pagina_56.webp" },
+        "pag_57": { "titulo": "Continentes - Ásia (Pág. 52)", "mapaUrl": "mapas_webp/pagina_57.webp" },
+        "pag_58": { "titulo": "Continentes - Ásia - Uso da Terra", "mapaUrl": "mapas_webp/pagina_58.webp" },
+        "pag_59": { "titulo": "Continentes - Oriente Médio (Pág. 54)", "mapaUrl": "mapas_webp/pagina_59.webp" },
+        "pag_60": { "titulo": "Continentes - Oriente Médio - Uso da Terra", "mapaUrl": "mapas_webp/pagina_60.webp" },
+        "pag_61": { "titulo": "Continentes - Sudeste Asiático (Pág. 56)", "mapaUrl": "mapas_webp/pagina_61.webp" },
+        "pag_62": { "titulo": "Continentes - Sudeste Asiático - Uso da Terra", "mapaUrl": "mapas_webp/pagina_62.webp" },
+        "pag_63": { "titulo": "Continentes - Oceania (Pág. 58)", "mapaUrl": "mapas_webp/pagina_63.webp" },
+        "pag_64": { "titulo": "Continentes - Oceania - Uso da Terra", "mapaUrl": "mapas_webp/pagina_64.webp" },
+        "pag_65": { "titulo": "Continentes - Polos Sul e Norte (Pág. 60)", "mapaUrl": "mapas_webp/pagina_65.webp" },
+        "pag_67": { "titulo": "Mundo - Placas Tectônicas e Crosta Oceânica (Pág. 62)", "mapaUrl": "mapas_webp/pagina_67.webp" },
+        "pag_68": { "titulo": "Mundo - Climas e Correntes Marítimas (Pág. 63)", "mapaUrl": "mapas_webp/pagina_68.webp" },
+        "pag_69": { "titulo": "Mundo - Precipitação Atmosférica (Pág. 64)", "mapaUrl": "mapas_webp/pagina_69.webp" },
+        "pag_70": { "titulo": "Mundo - Temperatura (Pág. 65)", "mapaUrl": "mapas_webp/pagina_70.webp" },
+        "pag_71": { "titulo": "Mundo - Ecorregiões Terrestres (Pág. 66)", "mapaUrl": "mapas_webp/pagina_71.webp" },
+        "pag_72": { "titulo": "Mundo - Formas de Relevo e Emissão de CO2 (Pág. 67)", "mapaUrl": "mapas_webp/pagina_72.webp" },
+        "pag_73": { "titulo": "Mundo - Biodiversidade (Pág. 68)", "mapaUrl": "mapas_webp/pagina_73.webp" },
+        "pag_74": { "titulo": "Mundo - Área de Lavouras e Pastagens (Pág. 69)", "mapaUrl": "mapas_webp/pagina_74.webp" },
+        "pag_75": { "titulo": "Mundo - Áreas Protegidas, Hídrica e Pesca (Pág. 70)", "mapaUrl": "mapas_webp/pagina_75.webp" },
+        "pag_76": { "titulo": "Mundo - Carvão Mineral, Ferro e Petróleo (Pág. 71)", "mapaUrl": "mapas_webp/pagina_76.webp" },
+        "pag_77": { "titulo": "Mundo - Energia Renovável (Pág. 72)", "mapaUrl": "mapas_webp/pagina_77.webp" },
+        "pag_78": { "titulo": "Mundo - População Total e Urbana (Pág. 73)", "mapaUrl": "mapas_webp/pagina_78.webp" },
+        "pag_79": { "titulo": "Mundo - Densidade Demográfica (Pág. 74)", "mapaUrl": "mapas_webp/pagina_79.webp" },
+        "pag_80": { "titulo": "Mundo - Natalidade e Mortalidade (Pág. 75)", "mapaUrl": "mapas_webp/pagina_80.webp" },
+        "pag_81": { "titulo": "Mundo - Refugiados e Deslocados Internos (Pág. 76)", "mapaUrl": "mapas_webp/pagina_81.webp" },
+        "pag_82": { "titulo": "Mundo - IDH e Esperança de Vida ao Nascer (Pág. 77)", "mapaUrl": "mapas_webp/pagina_82.webp" },
+        "pag_83": { "titulo": "Mundo - Mortalidade Infantil e Desemprego (Pág. 78)", "mapaUrl": "mapas_webp/pagina_83.webp" },
+        "pag_84": { "titulo": "Mundo - Crianças Abaixo do Peso e Subnutrição (Pág. 79)", "mapaUrl": "mapas_webp/pagina_84.webp" },
+        "pag_85": { "titulo": "Mundo - Obesidade e Insegurança Alimentar (Pág. 80)", "mapaUrl": "mapas_webp/pagina_85.webp" },
+        "pag_86": { "titulo": "Mundo - Alfabetização e Grau de Instrução (Pág. 81)", "mapaUrl": "mapas_webp/pagina_86.webp" },
+        "pag_87": { "titulo": "Mundo - Acesso à Água e Rede Sanitária (Pág. 82)", "mapaUrl": "mapas_webp/pagina_87.webp" },
+        "pag_88": { "titulo": "Mundo - Blocos Econômicos (Pág. 83)", "mapaUrl": "mapas_webp/pagina_88.webp" },
+        "pag_89": { "titulo": "Mundo - PIB e PIB per capita (Pág. 84)", "mapaUrl": "mapas_webp/pagina_89.webp" },
+        "pag_90": { "titulo": "Mundo - População Ativa e Turismo (Pág. 85)", "mapaUrl": "mapas_webp/pagina_90.webp" },
+        "pag_91": { "titulo": "Mundo - Gastos Públicos com Educação e Saúde (Pág. 86)", "mapaUrl": "mapas_webp/pagina_91.webp" },
+        "pag_92": { "titulo": "Mundo - Ferrovias e Conectividade Rodoviária (Pág. 87)", "mapaUrl": "mapas_webp/pagina_92.webp" },
+        "pag_93": { "titulo": "Mundo - Transporte Marítimo e Aéreo (Pág. 88)", "mapaUrl": "mapas_webp/pagina_93.webp" },
+        "pag_94": { "titulo": "Mundo - Telefonia Celular e Acesso à Internet (Pág. 89)", "mapaUrl": "mapas_webp/pagina_94.webp" },
+        "pag_97": { "titulo": "Brasil - Mapa Político (Pág. 92)", "mapaUrl": "mapas_webp/pagina_97.webp" },
+        "pag_98": { "titulo": "Brasil - Unidades Político-Administrativas (Pág. 93)", "mapaUrl": "mapas_webp/pagina_98.webp" },
+        "pag_99": { "titulo": "Brasil - Evolução da Divisão Político-Administrativa (Pág. 94)", "mapaUrl": "mapas_webp/pagina_99.webp" },
+        "pag_100": { "titulo": "Brasil - Evolução Histórica (continuação - Pág. 95)", "mapaUrl": "mapas_webp/pagina_100.webp" },
+        "pag_101": { "titulo": "Brasil - Organização Territorial (Pág. 96)", "mapaUrl": "mapas_webp/pagina_101.webp" },
+        "pag_102": { "titulo": "Brasil - Pontos Extremos e Fuso Horário (Pág. 97)", "mapaUrl": "mapas_webp/pagina_102.webp" },
+        "pag_103": { "titulo": "Brasil - Mapa Físico (Pág. 98)", "mapaUrl": "mapas_webp/pagina_103.webp" },
+        "pag_104": { "titulo": "Brasil - Clima (Pág. 99)", "mapaUrl": "mapas_webp/pagina_104.webp" },
+        "pag_105": { "titulo": "Brasil - Relevo (Pág. 100)", "mapaUrl": "mapas_webp/pagina_105.webp" },
+        "pag_106": { "titulo": "Brasil - Relevo e Perfis (Pág. 101)", "mapaUrl": "mapas_webp/pagina_106.webp" },
+        "pag_107": { "titulo": "Brasil - Vegetação (Pág. 102)", "mapaUrl": "mapas_webp/pagina_107.webp" },
+        "pag_108": { "titulo": "Brasil - Vegetação Original e Atual (Pág. 103)", "mapaUrl": "mapas_webp/pagina_108.webp" },
+        "pag_109": { "titulo": "Brasil - Províncias Estruturais (Pág. 104)", "mapaUrl": "mapas_webp/pagina_109.webp" },
+        "pag_110": { "titulo": "Brasil - Suscetibilidade a Deslizamentos (Pág. 105)", "mapaUrl": "mapas_webp/pagina_110.webp" },
+        "pag_111": { "titulo": "Brasil - Cobertura e Uso da Terra (Pág. 106)", "mapaUrl": "mapas_webp/pagina_111.webp" },
+        "pag_112": { "titulo": "Brasil - Potencialidade Agrícola Natural (Pág. 107)", "mapaUrl": "mapas_webp/pagina_112.webp" },
+        "pag_113": { "titulo": "Brasil - Biomas (Pág. 108)", "mapaUrl": "mapas_webp/pagina_113.webp" },
+        "pag_114": { "titulo": "Brasil - Espécies Ameaçadas de Extinção (Pág. 109)", "mapaUrl": "mapas_webp/pagina_114.webp" },
+        "pag_115": { "titulo": "Brasil - Regiões Hidrográficas (Pág. 110)", "mapaUrl": "mapas_webp/pagina_115.webp" },
+        "pag_116": { "titulo": "Brasil - Águas Subterrâneas (Pág. 111)", "mapaUrl": "mapas_webp/pagina_116.webp" },
+        "pag_117": { "titulo": "Brasil - Terras Indígenas (Pág. 112)", "mapaUrl": "mapas_webp/pagina_117.webp" },
+        "pag_118": { "titulo": "Brasil - Territórios Quilombolas (Pág. 113)", "mapaUrl": "mapas_webp/pagina_118.webp" },
+        "pag_119": { "titulo": "Brasil - Unidades de Conservação Federais (Pág. 114)", "mapaUrl": "mapas_webp/pagina_119.webp" },
+        "pag_120": { "titulo": "Brasil - Unidades de Conservação (continuação - Pág. 115)", "mapaUrl": "mapas_webp/pagina_120.webp" },
+        "pag_121": { "titulo": "Brasil - Características Demográficas (Pág. 116)", "mapaUrl": "mapas_webp/pagina_121.webp" },
+        "pag_122": { "titulo": "Brasil - Distribuição da População (Pág. 117)", "mapaUrl": "mapas_webp/pagina_122.webp" },
+        "pag_123": { "titulo": "Brasil - Densidade Demográfica (Pág. 118)", "mapaUrl": "mapas_webp/pagina_123.webp" },
+        "pag_124": { "titulo": "Brasil - Idade da População (Pág. 119)", "mapaUrl": "mapas_webp/pagina_124.webp" },
+        "pag_125": { "titulo": "Brasil - Povos e Comunidades Tradicionais (Pág. 120)", "mapaUrl": "mapas_webp/pagina_125.webp" },
+        "pag_126": { "titulo": "Brasil - Povos Tradicionais (detalhes - Pág. 121)", "mapaUrl": "mapas_webp/pagina_126.webp" },
+        "pag_127": { "titulo": "Brasil - População por Cor ou Raça (Pág. 122)", "mapaUrl": "mapas_webp/pagina_127.webp" },
+        "pag_128": { "titulo": "Brasil - Mortalidade Infantil e Homicídios em Jovens (Pág. 123)", "mapaUrl": "mapas_webp/pagina_128.webp" },
+        "pag_129": { "titulo": "Brasil - Saúde (Pág. 124)", "mapaUrl": "mapas_webp/pagina_129.webp" },
+        "pag_130": { "titulo": "Brasil - Equipamentos de Saúde (Pág. 125)", "mapaUrl": "mapas_webp/pagina_130.webp" },
+        "pag_131": { "titulo": "Brasil - Alfabetização (Pág. 126)", "mapaUrl": "mapas_webp/pagina_131.webp" },
+        "pag_132": { "titulo": "Brasil - Distorção Idade/Série e Abandono Escolar (Pág. 127)", "mapaUrl": "mapas_webp/pagina_132.webp" },
+        "pag_133": { "titulo": "Brasil - Ensino Superior (Pág. 128)", "mapaUrl": "mapas_webp/pagina_133.webp" },
+        "pag_134": { "titulo": "Brasil - Rendimento (Pág. 129)", "mapaUrl": "mapas_webp/pagina_134.webp" },
+        "pag_135": { "titulo": "Brasil - Estatísticas de Gênero (Pág. 130)", "mapaUrl": "mapas_webp/pagina_135.webp" },
+        "pag_136": { "titulo": "Brasil - Turismo (Pág. 131)", "mapaUrl": "mapas_webp/pagina_136.webp" },
+        "pag_137": { "titulo": "Brasil - PIB per capita (Pág. 132)", "mapaUrl": "mapas_webp/pagina_137.webp" },
+        "pag_138": { "titulo": "Brasil - Atividades Agropecuárias no PIB Municipal (Pág. 133)", "mapaUrl": "mapas_webp/pagina_138.webp" },
+        "pag_139": { "titulo": "Brasil - Produção de Soja (Pág. 134)", "mapaUrl": "mapas_webp/pagina_139.webp" },
+        "pag_140": { "titulo": "Brasil - Culturas Temporárias (Pág. 135)", "mapaUrl": "mapas_webp/pagina_140.webp" },
+        "pag_141": { "titulo": "Brasil - Culturas Permanentes (Pág. 136)", "mapaUrl": "mapas_webp/pagina_141.webp" },
+        "pag_142": { "titulo": "Brasil - Produção de Café (Pág. 137)", "mapaUrl": "mapas_webp/pagina_142.webp" },
+        "pag_143": { "titulo": "Brasil - Pecuária (Pág. 138)", "mapaUrl": "mapas_webp/pagina_143.webp" },
+        "pag_144": { "titulo": "Brasil - Rebanhos e Produção Animal (Pág. 139)", "mapaUrl": "mapas_webp/pagina_144.webp" },
+        "pag_145": { "titulo": "Brasil - Agrotóxicos (Pág. 140)", "mapaUrl": "mapas_webp/pagina_145.webp" },
+        "pag_146": { "titulo": "Brasil - Adubação (Pág. 141)", "mapaUrl": "mapas_webp/pagina_146.webp" },
+        "pag_147": { "titulo": "Brasil - Assentamentos Rurais (Pág. 142)", "mapaUrl": "mapas_webp/pagina_147.webp" },
+        "pag_148": { "titulo": "Brasil - Caracterização do Setor Industrial (Pág. 143)", "mapaUrl": "mapas_webp/pagina_148.webp" },
+        "pag_149": { "titulo": "Brasil - Setores Industriais (Pág. 144)", "mapaUrl": "mapas_webp/pagina_149.webp" },
+        "pag_150": { "titulo": "Brasil - Agroindústria (Pág. 145)", "mapaUrl": "mapas_webp/pagina_150.webp" },
+        "pag_151": { "titulo": "Brasil - Sistema Elétrico (Pág. 146)", "mapaUrl": "mapas_webp/pagina_151.webp" },
+        "pag_152": { "titulo": "Brasil - Meios de Comunicação (Pág. 147)", "mapaUrl": "mapas_webp/pagina_152.webp" },
+        "pag_153": { "titulo": "Brasil - Evolução das Redes Ferroviária e Rodoviária (Pág. 148)", "mapaUrl": "mapas_webp/pagina_153.webp" },
+        "pag_154": { "titulo": "Brasil - Redes de Transporte (Pág. 149)", "mapaUrl": "mapas_webp/pagina_154.webp" },
+        "pag_155": { "titulo": "Brasil - Grau de Urbanização (Pág. 150)", "mapaUrl": "mapas_webp/pagina_155.webp" },
+        "pag_156": { "titulo": "Brasil - Regiões Metropolitanas (Pág. 151)", "mapaUrl": "mapas_webp/pagina_156.webp" },
+        "pag_157": { "titulo": "Brasil - Hierarquia Urbana (Pág. 152)", "mapaUrl": "mapas_webp/pagina_157.webp" },
+        "pag_158": { "titulo": "Brasil - Abastecimento de Água (Pág. 153)", "mapaUrl": "mapas_webp/pagina_158.webp" },
+        "pag_159": { "titulo": "Brasil - Esgotamento Sanitário (Pág. 154)", "mapaUrl": "mapas_webp/pagina_159.webp" },
+        "pag_160": { "titulo": "Brasil - Coleta de Lixo (Pág. 155)", "mapaUrl": "mapas_webp/pagina_160.webp" },
+        "pag_161": { "titulo": "Brasil - Regiões Geográficas Imediatas e Intermediárias (Pág. 156)", "mapaUrl": "mapas_webp/pagina_161.webp" },
+        "pag_162": { "titulo": "Brasil - Regiões Rurais (Pág. 157)", "mapaUrl": "mapas_webp/pagina_162.webp" },
+        "pag_164": { "titulo": "UF - Rondônia (Pág. 159)", "mapaUrl": "mapas_webp/pagina_164.webp" },
+        "pag_165": { "titulo": "UF - Acre (Pág. 160)", "mapaUrl": "mapas_webp/pagina_165.webp" },
+        "pag_166": { "titulo": "UF - Amazonas (Pág. 161)", "mapaUrl": "mapas_webp/pagina_166.webp" },
+        "pag_167": { "titulo": "UF - Roraima (Pág. 162)", "mapaUrl": "mapas_webp/pagina_167.webp" },
+        "pag_168": { "titulo": "UF - Pará (Pág. 163)", "mapaUrl": "mapas_webp/pagina_168.webp" },
+        "pag_169": { "titulo": "UF - Amapá (Pág. 164)", "mapaUrl": "mapas_webp/pagina_169.webp" },
+        "pag_170": { "titulo": "UF - Tocantins (Pág. 165)", "mapaUrl": "mapas_webp/pagina_170.webp" },
+        "pag_171": { "titulo": "UF - Maranhão (Pág. 166)", "mapaUrl": "mapas_webp/pagina_171.webp" },
+        "pag_172": { "titulo": "UF - Piauí (Pág. 167)", "mapaUrl": "mapas_webp/pagina_172.webp" },
+        "pag_173": { "titulo": "UF - Ceará (Pág. 168)", "mapaUrl": "mapas_webp/pagina_173.webp" },
+        "pag_174": { "titulo": "UF - Rio Grande do Norte (Pág. 169)", "mapaUrl": "mapas_webp/pagina_174.webp" },
+        "pag_175": { "titulo": "UF - Paraíba (Pág. 170)", "mapaUrl": "mapas_webp/pagina_175.webp" },
+        "pag_176": { "titulo": "UF - Pernambuco (Pág. 171)", "mapaUrl": "mapas_webp/pagina_176.webp" },
+        "pag_177": { "titulo": "UF - Alagoas (Pág. 172)", "mapaUrl": "mapas_webp/pagina_177.webp" },
+        "pag_178": { "titulo": "UF - Sergipe (Pág. 173)", "mapaUrl": "mapas_webp/pagina_178.webp" },
+        "pag_179": { "titulo": "UF - Bahia (Pág. 174)", "mapaUrl": "mapas_webp/pagina_179.webp" },
+        "pag_180": { "titulo": "UF - Minas Gerais (Pág. 175)", "mapaUrl": "mapas_webp/pagina_180.webp" },
+        "pag_181": { "titulo": "UF - Espírito Santo (Pág. 176)", "mapaUrl": "mapas_webp/pagina_181.webp" },
+        "pag_182": { "titulo": "UF - Rio de Janeiro (Pág. 177)", "mapaUrl": "mapas_webp/pagina_182.webp" },
+        "pag_183": { "titulo": "UF - São Paulo (Pág. 178)", "mapaUrl": "mapas_webp/pagina_183.webp" },
+        "pag_184": { "titulo": "UF - Paraná (Pág. 179)", "mapaUrl": "mapas_webp/pagina_184.webp" },
+        "pag_185": { "titulo": "UF - Santa Catarina (Pág. 180)", "mapaUrl": "mapas_webp/pagina_185.webp" },
+        "pag_186": { "titulo": "UF - Rio Grande do Sul (Pág. 181)", "mapaUrl": "mapas_webp/pagina_186.webp" },
+        "pag_187": { "titulo": "UF - Mato Grosso do Sul (Pág. 182)", "mapaUrl": "mapas_webp/pagina_187.webp" },
+        "pag_188": { "titulo": "UF - Mato Grosso (Pág. 183)", "mapaUrl": "mapas_webp/pagina_188.webp" },
+        "pag_189": { "titulo": "UF - Goiás e Distrito Federal (Pág. 184)", "mapaUrl": "mapas_webp/pagina_189.webp" }
+    };
+
+    const map = L.map('map', { 
+        crs: L.CRS.Simple, 
+        minZoom: -3, 
+        maxZoom: 4, 
+        zoomSnap: 0.1, 
+        zoomControl: false, 
+        attributionControl: false 
+    });
+    
+    L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+    let currentOverlay = null;
+    let anguloRotacao = 0;
+    let chaveAtual = null;
+    let imgOriginal = null;
+
+    function carregarPrancha(chave) {
+        chaveAtual = chave;
+        anguloRotacao = 0;
+        const dados = paginasAtlas[chave];
+        if (!dados) return;
+
+        const imgTemp = new Image();
+        imgTemp.onload = function() {
+            imgOriginal = this;
+            atualizarMapa();
+        };
+        imgTemp.src = dados.mapaUrl;
+    }
+
+    function girarMapa(delta) {
+        anguloRotacao = (anguloRotacao + delta) % 360;
+        if (anguloRotacao < 0) anguloRotacao += 360;
+        atualizarMapa();
+    }
+
+    function resetarRotacao() {
+        anguloRotacao = 0;
+        atualizarMapa();
+    }
+
+    function atualizarMapa() {
+        if (!imgOriginal) return;
+
+        if (currentOverlay) {
+            map.removeLayer(currentOverlay);
+        }
+
+        let urlFinal = imgOriginal.src;
+        let largFinal = imgOriginal.naturalWidth;
+        let altFinal = imgOriginal.naturalHeight;
+
+        // Se houver rotação, redesenha via Canvas
+        if (anguloRotacao !== 0) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const e90ou270 = (anguloRotacao === 90 || anguloRotacao === 270);
+            largFinal = e90ou270 ? imgOriginal.naturalHeight : imgOriginal.naturalWidth;
+            altFinal = e90ou270 ? imgOriginal.naturalWidth : imgOriginal.naturalHeight;
+
+            canvas.width = largFinal;
+            canvas.height = altFinal;
+
+            // Rotação centralizada no Canvas
+            ctx.translate(largFinal / 2, altFinal / 2);
+            ctx.rotate((anguloRotacao * Math.PI) / 180);
+            ctx.drawImage(imgOriginal, -imgOriginal.naturalWidth / 2, -imgOriginal.naturalHeight / 2);
+
+            urlFinal = canvas.toDataURL('image/webp');
+        }
+
+        // Bounding box simétrica em relação à origem [0,0]
+        // Garante que o centro da imagem seja sempre a coordenada [0,0] do Leaflet
+        const halfH = altFinal / 2;
+        const halfW = largFinal / 2;
+        const bounds = [[-halfH, -halfW], [halfH, halfW]];
+
+        currentOverlay = L.imageOverlay(urlFinal, bounds).addTo(map);
+        map.fitBounds(bounds);
+    }
+
+    window.onload = () => {
+        const select = document.getElementById('mapSelect');
+        for (const [chave, item] of Object.entries(paginasAtlas)) {
+            const opt = document.createElement('option');
+            opt.value = chave;
+            opt.textContent = item.titulo;
+            select.appendChild(opt);
+        }
+        
+        const primeiraChave = Object.keys(paginasAtlas)[0];
+        if (primeiraChave) carregarPrancha(primeiraChave);
+    };
+    </script>
+</body>
+</html>
